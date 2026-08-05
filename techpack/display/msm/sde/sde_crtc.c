@@ -5034,13 +5034,6 @@ sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 	}
 
 	if (!cstate->fod_dim_layer) {
-		// Samsung fingerprint HBM
-		if (vdd->finger_mask && vdd->br_info.common_br.finger_mask_bl_level != 0) {
-			vdd->br_info.common_br.finger_mask_bl_level = 0;
-			vdd->finger_mask = 0;
-			vdd->finger_mask_updated = true;
-			SDE_DEBUG("[FINGER_MASK] disabled mask");
-		}
 		return;
 	}
 
@@ -5048,13 +5041,11 @@ sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 		if (pstates[plane_idx].stage >= dim_layer_stage)
 			pstates[plane_idx].stage++;
 
-	// Samsung fingerprint HBM
-	if (!vdd->finger_mask && vdd->br_info.common_br.finger_mask_bl_level == 0) {
-		vdd->br_info.common_br.finger_mask_bl_level = 331;
-		vdd->finger_mask = 1;
-		vdd->finger_mask_updated = true;
-		SDE_DEBUG("[FINGER_MASK] enabled mask");
-	}
+	/* finger_mask / HBM are driven entirely by the HAL writing to
+	 * /sys/class/lcd/panel/mask_brightness at the correct moments.
+	 * Do NOT pre-set finger_mask here — it causes ss_finger_hbm_store()
+	 * to return "mask already enabled" on the first real HBM request,
+	 * blocking BACKLIGHT_FINGERMASK_ON from ever firing. */
 }
 
 static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,

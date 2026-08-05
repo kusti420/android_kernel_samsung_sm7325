@@ -7,9 +7,18 @@ void set_sensor_type(const int type_value, int *result)
 			pr_info("maintain type check from out of order :%s\n",
 				sensor_status[*result + 2]);
 		} else {
-			*result = type_value;
-			pr_info("FP_SET_SENSOR_TYPE :%s\n", *result > 0 ?
-					sensor_status[3] : sensor_status[*result + 2]);
+			/*
+			 * Cap positive sensor types to SENSOR_OK (1).
+			 * TEE reports SENSOR_EGISOPTICAL (8) for ET7xx optical
+			 * sensors, but BAuth reads type_check sysfs and triggers
+			 * persbds (calibration data wipe) when it sees 8.
+			 * OneUI kernel returns 1 for the same sensor/TEE value.
+			 * BUILD_CHECK:TYPE_CHECK_CAP
+			 */
+			*result = type_value > 0 ? SENSOR_OK : type_value;
+			pr_info("FP_SET_SENSOR_TYPE :%s (raw=%d)\n", *result > 0 ?
+					sensor_status[3] : sensor_status[*result + 2],
+					type_value);
 		}
 	} else {
 		pr_err("FP_SET_SENSOR_TYPE invalid value %d\n", type_value);
