@@ -157,10 +157,6 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		goto out;
 
 	new_value = !!new_value;
-	/* IchthysOS/AOSP-17 a52sxq bringup: clamp all setenforce writes to permissive so
-	 * userspace init (which setenforce(1)s after loading policy) can't re-enable
-	 * enforcing. Pairs with the forced-permissive in selinux_init(). Revert once done. */
-	new_value = 0;
 	old_value = enforcing_enabled(state);
 
 	// [ SEC_SELINUX_PORTING_COMMON
