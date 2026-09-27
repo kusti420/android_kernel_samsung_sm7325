@@ -1950,6 +1950,50 @@ static inline bool may_mandlock(void)
 #include <linux/io_record.h>
 #endif
 
+/*
+ * Backport of path_umount() / can_umount() from upstream commit 41525f56e256
+ * ("fs: refactor ksys_umount"), which KernelSU-Next needs to unmount by path on
+ * this pre-5.9 kernel. Mirrors the checks in ksys_umount() below, including the
+ * Samsung KDP mount-flags variant.
+ */
+static int can_umount(const struct path *path, int flags)
+{
+	struct mount *mnt = real_mount(path->mnt);
+
+	if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
+		return -EINVAL;
+	if (!may_mount())
+		return -EPERM;
+	if (path->dentry != path->mnt->mnt_root)
+		return -EINVAL;
+	if (!check_mnt(mnt))
+		return -EINVAL;
+#ifdef CONFIG_KDP_NS
+	if (((struct kdp_mount *)mnt)->mnt->mnt_flags & MNT_LOCKED)
+#else
+	if (mnt->mnt.mnt_flags & MNT_LOCKED) /* Check optimistically */
+#endif
+		return -EINVAL;
+	if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+	return 0;
+}
+
+int path_umount(struct path *path, int flags)
+{
+	struct mount *mnt = real_mount(path->mnt);
+	int ret;
+
+	ret = can_umount(path, flags);
+	if (!ret)
+		ret = do_umount(mnt, flags);
+
+	/* we mustn't call path_put() as that would clear mnt_expiry_mark */
+	dput(path->dentry);
+	mntput_no_expire(mnt);
+	return ret;
+}
+
 int ksys_umount(char __user *name, int flags)
 {
 	struct path path;
