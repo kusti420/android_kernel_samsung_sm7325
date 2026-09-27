@@ -7220,10 +7220,6 @@ static __init int selinux_init(void)
 	pr_info("SELinux:  Initializing.\n");
 
 	memset(&selinux_state, 0, sizeof(selinux_state));
-	/* IchthysOS/AOSP-17 a52sxq bringup: the Samsung bootloader ignores boot.img
-	 * BOARD_KERNEL_CMDLINE, so androidboot.selinux=permissive / enforcing=0 never
-	 * reach the kernel. Force SELinux permissive at init. Revert once policy done. */
-	enforcing_set(&selinux_state, 0);
 	selinux_state.checkreqprot = selinux_checkreqprot_boot;
 	selinux_ss_init(&selinux_state.ss);
 	selinux_avc_init(&selinux_state.avc);
