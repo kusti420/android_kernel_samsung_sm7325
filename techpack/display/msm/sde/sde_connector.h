@@ -491,6 +491,8 @@ struct sde_connector_dyn_hdr_metadata {
  * @cmd_rx_buf: the return buffer of response of command transfer
  * @rx_len: the length of dcs command received buffer
  * @cached_edid: cached edid data for the connector
+ * @ichthys_finger_mask_prop: IchthysOS: last "fingerprint_mask" value seen at
+ *	pre_kickoff (edge detection for the frame-synced fingerprint mask HBM)
  */
 struct sde_connector {
 	struct drm_connector base;
@@ -565,7 +567,12 @@ struct sde_connector {
 	int rx_len;
 
 	struct edid *cached_edid;
+
+	u32 ichthys_finger_mask_prop;
 };
+
+/* IchthysOS: mask_brightness level for fingerprint_mask == 1 (the HAL's value) */
+#define ICHTHYS_FINGER_MASK_DEFAULT_LEVEL	331
 
 /**
  * to_sde_connector - convert drm_connector pointer to sde connector pointer

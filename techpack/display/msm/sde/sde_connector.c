@@ -903,14 +903,40 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 		vdd = display->panel->panel_private;
 		finger_mask_state = sde_connector_get_property(c_conn->base.state,
 				CONNECTOR_PROP_FINGERPRINT_MASK);
-                if (finger_mask_state == 0 && vdd->finger_mask == 1) {
-                        finger_mask_state = vdd->finger_mask;
-                        SDE_ERROR("[FINGER_MASK]updated finger mask mode %d\n", vdd->finger_mask);
-                } else if (finger_mask_state == 1 && vdd->finger_mask == 0) {
-                        finger_mask_state = vdd->finger_mask;
-                        vdd->finger_mask_updated = false;
-                        SDE_ERROR("[FINGER_MASK]updated finger mask mode %d\n", vdd->finger_mask);
-                }
+		/*
+		 * IchthysOS: frame-synced fingerprint mask HBM. The composer sets
+		 * "fingerprint_mask" in the same atomic commit as the frame that
+		 * first carries (1) or no longer carries (0) SystemUI's UDFPS mask
+		 * layer. Only an EDGE of the property moves finger_mask, so the
+		 * mask_brightness sysfs path (property constantly 0) works exactly
+		 * as before. finger_mask_updated set here is consumed a few lines
+		 * below by c_conn->ops.pre_kickoff (dsi_display_pre_kickoff ->
+		 * ss_send_hbm_fingermask_image_tx), i.e. the HBM DCS goes out in
+		 * THIS kickoff, before this frame's pixels are transferred: the
+		 * dim layer and the HBM reach the panel together.
+		 * Value 1 = the default mask level (331, as the HAL writes);
+		 * a value > 1 is taken as the mask level itself.
+		 * (Replaces the stock check, which only logged on every frame and,
+		 * with the property at 1, cancelled a pending mask OFF.)
+		 */
+		if (vdd && vdd->support_optical_fingerprint &&
+				finger_mask_state != c_conn->ichthys_finger_mask_prop) {
+			c_conn->ichthys_finger_mask_prop = finger_mask_state;
+			if (finger_mask_state && !vdd->finger_mask) {
+				vdd->br_info.common_br.finger_mask_bl_level =
+					finger_mask_state > 1 ? finger_mask_state :
+					ICHTHYS_FINGER_MASK_DEFAULT_LEVEL;
+				vdd->finger_mask = 1;
+				vdd->finger_mask_updated = true;
+			} else if (!finger_mask_state && vdd->finger_mask) {
+				vdd->br_info.common_br.finger_mask_bl_level = 0;
+				vdd->finger_mask = 0;
+				vdd->finger_mask_updated = true;
+			}
+			SDE_INFO("[FINGER_MASK] property %u -> mask %d updated %d\n",
+				finger_mask_state, vdd->finger_mask,
+				vdd->finger_mask_updated);
+		}
 	}
 #endif
 
@@ -2892,8 +2918,9 @@ static int _sde_connector_install_properties(struct drm_device *dev,
 
 #if defined(CONFIG_DISPLAY_SAMSUNG)
 	/* SAMSUNG_FINGERPRINT */
+	/* IchthysOS: up to 1023 so a mask level can be passed (see pre_kickoff) */
 	msm_property_install_range(&c_conn->property_info, "fingerprint_mask",
-		0x0, 0, 100, 0,
+		0x0, 0, 1023, 0,
 		CONNECTOR_PROP_FINGERPRINT_MASK);
 #endif
 
