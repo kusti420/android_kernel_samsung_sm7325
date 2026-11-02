@@ -6551,7 +6551,13 @@ int ss_brightness_dcs(struct samsung_display_driver_data *vdd, int level, int ba
 			if (vdd->finger_mask_updated) /* do not backup br.bl_level at on to on */
 				backup_bl_level = vdd->br_info.common_br.bl_level;
 			level = vdd->br_info.common_br.finger_mask_bl_level;
-			vdd->br_info.acl_status = 0;
+			/*
+			 * IchthysOS: keep ACL as it was. Switching it off made bright content
+			 * brighter than dark content under the mask HBM, so SystemUI's uniform
+			 * nits-matched dim could not cancel the jump everywhere at once. The
+			 * small sensor circle on the dimmed screen keeps the APL low, so ACL
+			 * barely acts on the illumination anyway.
+			 */
 
 			LCD_INFO(vdd, "[FINGER_MASK]BACKLIGHT_FINGERMASK_ON turn on finger hbm & back up acl = %d, level = %d\n",
 				backup_acl, backup_bl_level);
