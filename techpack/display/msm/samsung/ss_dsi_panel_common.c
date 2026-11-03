@@ -6552,6 +6552,13 @@ int ss_brightness_dcs(struct samsung_display_driver_data *vdd, int level, int ba
 				backup_bl_level = vdd->br_info.common_br.bl_level;
 			level = vdd->br_info.common_br.finger_mask_bl_level;
 			/*
+			 * IchthysOS: never darker than the screen already is. Above the mask level
+			 * (331 = 547 nits) the normal level is the brighter one, and dropping to the
+			 * mask level would visibly dim the screen, which no tone curve can undo.
+			 */
+			if (backup_bl_level > level && backup_bl_level <= vdd->br_info.common_br.max_bl_level)
+				level = backup_bl_level;
+			/*
 			 * IchthysOS: keep ACL as it was. Switching it off made bright content
 			 * brighter than dark content under the mask HBM, so SystemUI's uniform
 			 * nits-matched dim could not cancel the jump everywhere at once. The
@@ -6575,6 +6582,9 @@ int ss_brightness_dcs(struct samsung_display_driver_data *vdd, int level, int ba
 				send finger hbm & back up acl = %d, level = %d->%d\n",
 				vdd->br_info.acl_status, level,vdd->br_info.common_br.finger_mask_bl_level);
 			level = vdd->br_info.common_br.finger_mask_bl_level;
+			/* IchthysOS: same rule as at mask on. */
+			if (backup_bl_level > level && backup_bl_level <= vdd->br_info.common_br.max_bl_level)
+				level = backup_bl_level;
 		}
 	}
 
