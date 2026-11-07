@@ -213,6 +213,31 @@ static struct dsi_panel_cmd_set *ss_vrr_hbm(struct samsung_display_driver_data *
 
 static bool last_br_hbm;
 
+/*
+ * IchthysOS: timing of the fingerprint-mask HBM switch, tunable live (root) to remove the flash at
+ * mask on / the dip at mask off. This command-mode panel keeps showing the last frame while the
+ * brightness commands go out; every wait between the brightness (DBV) write and the frame that
+ * carries the matching tone curve shows the old frame at the new brightness. Defaults = stock.
+ *   /sys/module/msm_drm/parameters/ichthys_mask_split_ms   wait between DBV and the AOR part
+ *       (stock 9 ms; "panel limitation for HBM & AOR setting")
+ *   /sys/module/msm_drm/parameters/ichthys_mask_smooth_ms  wait after smooth-dimming off (stock 9)
+ *   /sys/module/msm_drm/parameters/ichthys_mask_off_wait_us wait before the mask-off brightness
+ *       (stock 9000 at >60 Hz, 17000 at 60 Hz; -1 = stock)
+ */
+static int ichthys_mask_split_ms = -1;
+module_param(ichthys_mask_split_ms, int, 0644);
+static int ichthys_mask_smooth_ms = -1;
+module_param(ichthys_mask_smooth_ms, int, 0644);
+static int ichthys_mask_off_wait_us = -1;
+module_param(ichthys_mask_off_wait_us, int, 0644);
+
+static int ichthys_split_ms(struct samsung_display_driver_data *vdd)
+{
+	if (ichthys_mask_split_ms >= 0)
+		return ichthys_mask_split_ms;
+	return vdd->vrr.cur_refresh_rate > 60 ? HBM_NORMAL_DELAY_120FPS : HBM_NORMAL_DELAY_60FPS;
+}
+
 #define get_bit(value, shift, width)	((value >> shift) & (GENMASK(width - 1, 0)))
 static struct dsi_panel_cmd_set *ss_brightness_gamma_mode2_normal
 							(struct samsung_display_driver_data *vdd, int *level_key)
@@ -235,8 +260,9 @@ static struct dsi_panel_cmd_set *ss_brightness_gamma_mode2_normal
 	pcmds = ss_get_cmds(vdd, TX_GAMMA_MODE2_NORMAL);
 
 	if (ss_panel_revision(vdd) >= 'I') {
-		finger_mask_update_delay = vdd->vrr.cur_refresh_rate > 60 ? 9000 : 17000;
-		if (pcmds->cmds[6].last_command == 1)
+		finger_mask_update_delay = ichthys_mask_off_wait_us >= 0 ? ichthys_mask_off_wait_us :
+				(vdd->vrr.cur_refresh_rate > 60 ? 9000 : 17000);
+		if (pcmds->cmds[6].last_command == 1 && finger_mask_update_delay > 0)
 			usleep_range(finger_mask_update_delay, finger_mask_update_delay + 1);
 
 		/*
@@ -261,11 +287,7 @@ static struct dsi_panel_cmd_set *ss_brightness_gamma_mode2_normal
 				aor cmd -> mask image
 			*/
 			pcmds->cmds[6].last_command = 1;
-
-			if (vdd->vrr.cur_refresh_rate > 60)
-				pcmds->cmds[6].post_wait_ms = HBM_NORMAL_DELAY_120FPS;
-			else
-				pcmds->cmds[6].post_wait_ms = HBM_NORMAL_DELAY_60FPS;
+			pcmds->cmds[6].post_wait_ms = ichthys_split_ms(vdd);
 		} else {
 			pcmds->cmds[6].last_command = 0;
 			pcmds->cmds[6].post_wait_ms = 0;
@@ -338,7 +360,9 @@ static struct dsi_panel_cmd_set *ss_brightness_gamma_mode2_hbm
 		if (vdd->finger_mask_updated) {
 			if (last_br_hbm == false) { /* Normal -> HBM Case Only */
 				/* Smooth Dimming Off First */
-				if (vdd->vrr.cur_refresh_rate > 60)
+				if (ichthys_mask_smooth_ms >= 0)
+					pcmds_smooth_off->cmds[3].post_wait_ms = ichthys_mask_smooth_ms;
+				else if (vdd->vrr.cur_refresh_rate > 60)
 					pcmds_smooth_off->cmds[3].post_wait_ms = FRAME_WAIT_120FPS;
 				else
 					pcmds_smooth_off->cmds[3].post_wait_ms = FRAME_WAIT_60FPS;
@@ -352,11 +376,7 @@ static struct dsi_panel_cmd_set *ss_brightness_gamma_mode2_hbm
 				aor cmd -> mask image
 			*/
 			pcmds->cmds[6].last_command = 1;
-
-			if (vdd->vrr.cur_refresh_rate > 60)
-				pcmds->cmds[6].post_wait_ms = HBM_NORMAL_DELAY_120FPS;
-			else
-				pcmds->cmds[6].post_wait_ms = HBM_NORMAL_DELAY_60FPS;
+			pcmds->cmds[6].post_wait_ms = ichthys_split_ms(vdd);
 		} else {
 			pcmds->cmds[6].last_command = 0;
 			pcmds->cmds[6].post_wait_ms = 0;

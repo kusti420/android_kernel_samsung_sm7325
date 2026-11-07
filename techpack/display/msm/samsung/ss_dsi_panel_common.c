@@ -905,6 +905,13 @@ void ss_check_te(struct samsung_display_driver_data *vdd)
 
 /* SAMSUNG_FINGERPRINT */
 /* TODO: replace with sde_encoder_wait_for_event(drm_enc, MSM_ENC_VBLANK) */
+/*
+ * IchthysOS: TE periods waited before the fingerprint-mask brightness goes out on a command-mode
+ * panel (stock 2), tunable live: /sys/module/msm_drm/parameters/ichthys_mask_pre_te (0..3).
+ */
+static int ichthys_mask_pre_te = 2;
+module_param(ichthys_mask_pre_te, int, 0644);
+
 void ss_wait_for_te_gpio(struct samsung_display_driver_data *vdd, int num_of_te, int delay_after_te, bool preemption)
 {
 	unsigned int disp_te_gpio;
@@ -2191,8 +2198,9 @@ int ss_send_cmd(struct samsung_display_driver_data *vdd,
 	 * 2. To make sure the timing of command tx, any command should not be interrupted
 	 */
 	if (vdd->support_optical_fingerprint && vdd->finger_mask_updated &&
-			type == TX_BRIGHT_CTRL && panel->panel_mode == DSI_OP_CMD_MODE)
-		ss_wait_for_te_gpio(vdd, 2, vdd->panel_hbm_entry_after_te, true);
+			type == TX_BRIGHT_CTRL && panel->panel_mode == DSI_OP_CMD_MODE &&
+			ichthys_mask_pre_te > 0)
+		ss_wait_for_te_gpio(vdd, ichthys_mask_pre_te, vdd->panel_hbm_entry_after_te, true);
 
 	ss_wrapper_dsi_panel_tx_cmd_set(panel, type);
 
